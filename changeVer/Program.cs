@@ -11,19 +11,22 @@ namespace changeVer
 {
     class Program
     {
+        static string _fileVersion = "";
+        static string _productVersion = "";
+        static string _configFilename = "";
+        static bool _isShow = false;
+
         static int Main(string[] args)
         {
-            string fileVersion="", productVersion = "", configFilename = "";
-
             // 0. get file/product version
-            if (parsingParam(args, ref fileVersion, ref productVersion, ref configFilename) == false)
+            if (parsingParam(args) == false)
             {
                 displayHelp();
                 return -1;
             }
 
             // 1. load ini
-            string[] lines = File.ReadAllLines(configFilename);
+            string[] lines = File.ReadAllLines(_configFilename);
 
             int exitCode = 0;
 
@@ -35,13 +38,25 @@ namespace changeVer
                     continue;
                 }
 
-                string result = replaceVersion(line, fileVersion, productVersion);
-
-                Console.WriteLine(string.Format("{0}:\t{1}", result, line));
-
-                if (result.CompareTo("OK") != 0)
+                if (_isShow)
                 {
-                    exitCode = -1;
+                    Console.WriteLine(string.Format("{0}:", line));
+                    showCurrentVersion(line);
+                }
+                else
+                {
+                    string result = replaceVersion(line);
+
+                    // if show mode then does not print result
+                    if (!_isShow)
+                    {
+                        Console.WriteLine(string.Format("{0}:\t{1}", result, line));
+                    }
+
+                    if (result.CompareTo("OK") != 0)
+                    {
+                        exitCode = -1;
+                    }
                 }
             }
 
@@ -49,13 +64,63 @@ namespace changeVer
         }
 
         /// <summary>
+        /// print current version
+        /// </summary>
+        /// <param name="rcfile">resource filename</param>
+        private static void showCurrentVersion(string rcfile)
+        {
+            FileStream rfs = null;
+            StreamReader sr = null;
+
+            try
+            {
+                // 1.2 open file
+                rfs = File.Open(rcfile, FileMode.Open, FileAccess.Read);
+                sr = new StreamReader(rfs, Encoding.Default);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return;
+            }
+
+            string line;
+            int ir = 0;
+            while ((line = sr.ReadLine()) != null)
+            {
+                ir++;
+
+                if (line.CompareTo("VS_VERSION_INFO VERSIONINFO") == 0)
+                {
+                    line = sr.ReadLine(); // FILEVERSION
+                    Console.WriteLine(string.Format("\t{0}", line));
+                    line = sr.ReadLine(); // PRODUCTVERSION
+                    Console.WriteLine(string.Format("\t{0}", line));
+
+                    ir += 2;
+                }
+                else if (Regex.IsMatch(line, "\\s*VALUE \"FileVersion\",", RegexOptions.IgnoreCase))
+                {
+                    Console.WriteLine(string.Format("\t{0}", line));
+                }
+                else if (Regex.IsMatch(line, "\\s*VALUE \"ProductVersion\",", RegexOptions.IgnoreCase))
+                {
+                    Console.WriteLine(string.Format("\t{0}", line));
+                }
+            }
+
+            sr.Close();
+            rfs.Close();
+
+            return;
+        }
+
+        /// <summary>
         /// set fileversion and product version to resource file
         /// </summary>
         /// <param name="rcfile">resource filename</param>
-        /// <param name="fileVersion">file version</param>
-        /// <param name="productVersion">product version</param>
         /// <returns></returns>
-        private static string replaceVersion(string rcfile, string fileVersion, string productVersion)
+        private static string replaceVersion(string rcfile)
         {
             string ret = "OK";
             string backfile = rcfile + ".bak";
@@ -89,8 +154,8 @@ namespace changeVer
                 if (line.CompareTo("VS_VERSION_INFO VERSIONINFO") == 0)
                 {
                     sw.WriteLine("VS_VERSION_INFO VERSIONINFO");
-                    sw.WriteLine(string.Format(" FILEVERSION {0}", fileVersion.Replace(".", ",")));
-                    sw.WriteLine(string.Format(" PRODUCTVERSION {0}", productVersion.Replace(".", ",")));
+                    sw.WriteLine(string.Format(" FILEVERSION {0}", _fileVersion.Replace(".", ",")));
+                    sw.WriteLine(string.Format(" PRODUCTVERSION {0}", _productVersion.Replace(".", ",")));
 
                     iw += 3;
 
@@ -104,7 +169,7 @@ namespace changeVer
                     char[] delimiter = { '"' };
                     string[] values = line.Split(delimiter);
 
-                    sw.WriteLine(string.Format("{0}\"FileVersion\", \"{1}\"", values[0], fileVersion.Replace(".", ", ")));
+                    sw.WriteLine(string.Format("{0}\"FileVersion\", \"{1}\"", values[0], _fileVersion.Replace(".", ", ")));
 
                     iw++;
                 }
@@ -113,7 +178,7 @@ namespace changeVer
                     char[] delimiter = { '"' };
                     string[] values = line.Split(delimiter);
 
-                    sw.WriteLine(string.Format("{0}\"ProductVersion\", \"{1}\"", values[0], productVersion.Replace(".", ", ")));
+                    sw.WriteLine(string.Format("{0}\"ProductVersion\", \"{1}\"", values[0], _productVersion.Replace(".", ", ")));
                     iw++;
                 }
                 else
@@ -147,32 +212,32 @@ namespace changeVer
         /// parsing commmand-line arguement 
         /// </summary>
         /// <param name="args">commmand-line arguements</param>
-        /// <param name="fileVersion">[out] file version</param>
-        /// <param name="productVersion">[out] product version</param>
-        /// <param name="configFilename">[out] config filename</param>
         /// <returns></returns>
-        static bool parsingParam(string[]  args, ref string fileVersion, ref string productVersion, ref string configFilename)
+        static bool parsingParam(string[]  args)
         {
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i].ToUpper().CompareTo("-F") == 0)
                 {
-                    if (args.Length > i + 1) fileVersion = args[++i];
+                    if (args.Length > i + 1) _fileVersion = args[++i];
                 }
                 else if (args[i].ToUpper().CompareTo("-P") == 0)
                 {
-                    if (args.Length > i + 1) productVersion = args[++i];
+                    if (args.Length > i + 1) _productVersion = args[++i];
                 }
                 else if (args[i].ToUpper().CompareTo("-C") == 0)
                 {
-                    if (args.Length > i + 1) configFilename = args[++i];
+                    if (args.Length > i + 1) _configFilename = args[++i];
+                }
+                else if (args[i].ToUpper().CompareTo("-S") == 0)
+                {
+                    _isShow = true;
                 }
             }
 
-            if (fileVersion.Length == 0 || productVersion.Length == 0 || configFilename.Length == 0)
-            {
-                return false;
-            }
+            if (_configFilename.Length == 0) return false;
+            if (_isShow == true) return true;
+            if (_fileVersion.Length == 0 || _productVersion.Length == 0 ) return false;
 
             return true;
         }
@@ -186,6 +251,13 @@ namespace changeVer
             Console.WriteLine("Usage>");
             Console.WriteLine(string.Format("$ {0} -f FileVersion -p ProductVersion -c ConfigFilename", getAppName()));
             Console.WriteLine(string.Format("ex) $ {0} -f 2.1.6.33 -p 2.1.0.0 -c acm_resources.txt", getAppName()));
+            Console.WriteLine(string.Format("ex) $ {0} -s -c acm_resources.txt", getAppName()));
+            Console.WriteLine("");
+            Console.WriteLine("Options>");
+            Console.WriteLine("\t-f[F]: After File version");
+            Console.WriteLine("\t-p[P]: After Product version");
+            Console.WriteLine("\t-c[C]: Config filename");
+            Console.WriteLine("\t-s[S]: Show Current version");
             Console.WriteLine("");
         }
 
