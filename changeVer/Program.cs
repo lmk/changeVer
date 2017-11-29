@@ -21,6 +21,21 @@ namespace changeVer
             // 0. get file/product version
             if (parsingParam(args) == false)
             {
+                if (_configFilename.Length == 0)
+                {
+                    Console.WriteLine("ERROR! Not Exist Config-File");
+                }
+
+                if (!_isShow && _fileVersion.Length ==0 )
+                {
+                    Console.WriteLine("ERROR! Not Exist File-Version");
+                }
+
+                if (!_isShow && _productVersion.Length == 0)
+                {
+                    Console.WriteLine("ERROR! Not Exist Product-Version");
+                }
+
                 displayHelp();
                 return -1;
             }
@@ -38,19 +53,31 @@ namespace changeVer
                     continue;
                 }
 
+                string rcPath = makeAbsolatePath(line);
+
+                if (!File.Exists(rcPath))
+                {
+                    Console.WriteLine(string.Format("ERROR! Not Exist Resource-File: {0}", rcPath));
+                    continue;
+                }
+
                 if (_isShow)
                 {
-                    Console.WriteLine(string.Format("{0}:", line));
-                    showCurrentVersion(line);
+                    // for show 
+
+                    Console.WriteLine(string.Format("{0}:", rcPath));
+                    showCurrentVersion(rcPath);
                 }
                 else
                 {
-                    string result = replaceVersion(line);
+                    // for change
+
+                    string result = replaceVersion(rcPath);
 
                     // if show mode then does not print result
                     if (!_isShow)
                     {
-                        Console.WriteLine(string.Format("{0}:\t{1}", result, line));
+                        Console.WriteLine(string.Format("{0}:\t{1}", result, rcPath));
                     }
 
                     if (result.CompareTo("OK") != 0)
@@ -61,6 +88,23 @@ namespace changeVer
             }
 
             return exitCode;
+        }
+
+        /// <summary>
+        /// make absolate path 
+        /// </summary>
+        /// <param name="path">path </param>
+        /// <returns>absolate path</returns>
+        private static string makeAbsolatePath(string path)
+        {
+            if (!Path.IsPathRooted(path))
+            {
+                string currentPath = Path.GetDirectoryName((new Uri(Assembly.GetExecutingAssembly().CodeBase)).AbsolutePath);
+
+                path = currentPath + Path.DirectorySeparatorChar + path;
+            }
+
+            return path;
         }
 
         /// <summary>
@@ -227,7 +271,14 @@ namespace changeVer
                 }
                 else if (args[i].ToUpper().CompareTo("-C") == 0)
                 {
-                    if (args.Length > i + 1) _configFilename = args[++i];
+                    if (args.Length > i + 1)
+                    {
+                        _configFilename = makeAbsolatePath(args[++i]);
+                        if (!File.Exists(_configFilename))
+                        {
+                            _configFilename = "";
+                        }
+                    }
                 }
                 else if (args[i].ToUpper().CompareTo("-S") == 0)
                 {
